@@ -148,10 +148,15 @@ fun EofApp(vm: MainViewModel = viewModel()) {
 
             if (state.observations.isEmpty()) {
                 item {
-                    Button(onClick = {
-                        addLog("Fetch data button")
-                        vm.fetch()
-                    }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = {
+                            addLog("Fetch data button")
+                            vm.fetch()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, AppBlue),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AppBlue)
+                    ) {
                         Text("Fetch Data")
                     }
                 }
@@ -314,11 +319,11 @@ private fun AnalysisPanel(
                     border = BorderStroke(1.dp, Color(0xFFC9A227)),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC9A227))
                 ) { Text("Fit") }
-                OutlinedButton(
-                    onClick = onUnmixToggle,
-                    border = BorderStroke(1.dp, Color(0xFF6D28D9)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF6D28D9))
-                ) { Text(if (isUnmixing) "Stop" else "Unmix") }
+            OutlinedButton(
+                onClick = onUnmixToggle,
+                border = BorderStroke(1.dp, AppBlue),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppBlue)
+            ) { Text(if (isUnmixing) "Stop" else "Unmix") }
                 OutlinedButton(
                     onClick = onPixelToggle,
                     border = BorderStroke(1.dp, Color(0xFFD97706)),
