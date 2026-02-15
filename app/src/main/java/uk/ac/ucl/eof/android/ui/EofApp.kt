@@ -1,9 +1,9 @@
 package uk.ac.ucl.eof.android.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,14 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -67,12 +65,12 @@ import kotlin.math.roundToInt
 private val AppBlue = Color(0xFF1E6BD6)
 private val AppSlate = Color(0xFF6B7280)
 private val AppBg = Color(0xFFF4F6F8)
+private val CardShape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun EofApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsState()
-    var showSources by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -110,14 +108,11 @@ fun EofApp(vm: MainViewModel = viewModel()) {
                 title = { Text("EOF", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = {
-                        addLog("Fetch requested")
+                        addLog("Redo fetch")
                         vm.fetch()
                     }) { Icon(Icons.Default.Refresh, contentDescription = "Redo") }
                 },
                 actions = {
-                    IconButton(onClick = { showSources = !showSources }) {
-                        Icon(Icons.Default.Storage, contentDescription = "Sources")
-                    }
                     IconButton(onClick = { showSettings = !showSettings }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -150,26 +145,31 @@ fun EofApp(vm: MainViewModel = viewModel()) {
                     }
                 )
             }
-            item { SourceProgressSection(state, state.sources.filter { it.enabled }) }
-            item { AoiCard(state.aoi) { vm.updateAoi(it) } }
+
+            if (state.observations.isEmpty()) {
+                item {
+                    Button(onClick = {
+                        addLog("Fetch data button")
+                        vm.fetch()
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Fetch Data")
+                    }
+                }
+            }
+
             item {
-                FramePanel(
+                AnalysisPanel(
                     state = state,
-                    playhead = playhead,
                     frameCount = frameCount,
+                    playhead = playhead,
                     isPlaying = isPlaying,
+                    isUnmixing = isUnmixing,
+                    isPixelFitRunning = isPixelFitRunning,
                     onPlayPause = {
                         isPlaying = !isPlaying
                         addLog(if (isPlaying) "Playback started" else "Playback paused")
                     },
-                    onScrub = { playhead = it }
-                )
-            }
-            item {
-                LiveActionsSection(
-                    state = state,
-                    isUnmixing = isUnmixing,
-                    isPixelFitRunning = isPixelFitRunning,
+                    onScrub = { playhead = it },
                     onFit = {
                         addLog("Phenology fit requested")
                         vm.fitPhenology()
@@ -184,20 +184,16 @@ fun EofApp(vm: MainViewModel = viewModel()) {
                     }
                 )
             }
-            item { NdviChartSection(state) }
-            item { ComparisonSection(state) }
-            item { PhenologySection(state) }
-
-            if (showSources) {
-                item { Text("Data Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium) }
-                items(items = state.sources, key = { it.type.name }) { source ->
-                    SourceRow(source = source, onToggle = { vm.toggleSource(source.type, it) })
-                }
-            }
 
             if (showSettings) {
-                item { Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium) }
-                item { SettingsCard(state.settings, vm::updateSettings) }
+                item {
+                    SettingsPanel(
+                        state = state,
+                        onAoiChange = vm::updateAoi,
+                        onSettingsChange = vm::updateSettings,
+                        onSourceToggle = { src, enabled -> vm.toggleSource(src.type, enabled) }
+                    )
+                }
             }
 
             if (showLog) {
@@ -209,7 +205,7 @@ fun EofApp(vm: MainViewModel = viewModel()) {
 
 @Composable
 private fun HeaderSection(state: AppState) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val enabled = state.sources.filter { it.enabled }.joinToString("+") { it.type.name }
             Text(
@@ -228,7 +224,7 @@ private fun HeaderSection(state: AppState) {
 
 @Composable
 private fun StatusSection(state: AppState, onFetch: () -> Unit, onCompare: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.loading) CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
@@ -253,42 +249,25 @@ private fun StatusSection(state: AppState, onFetch: () -> Unit, onCompare: () ->
 }
 
 @Composable
-private fun SourceProgressSection(state: AppState, enabledSources: List<SourceConfig>) {
-    if (enabledSources.isEmpty()) return
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Source Progress", fontWeight = FontWeight.Medium)
-            enabledSources.forEachIndexed { idx, src ->
-                val progress = if (state.loading) 0.15f + ((idx + 1) * 0.17f % 0.7f) else 0f
-                Text(src.type.label, style = MaterialTheme.typography.bodySmall)
-                if (state.loading) {
-                    LinearProgressIndicator(
-                        progress = { progress.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = AppBlue,
-                        trackColor = Color(0xFFE5E7EB)
-                    )
-                } else {
-                    Text("Idle", style = MaterialTheme.typography.bodySmall, color = AppSlate)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FramePanel(
+private fun AnalysisPanel(
     state: AppState,
-    playhead: Int,
     frameCount: Int,
+    playhead: Int,
     isPlaying: Boolean,
+    isUnmixing: Boolean,
+    isPixelFitRunning: Boolean,
     onPlayPause: () -> Unit,
-    onScrub: (Int) -> Unit
+    onScrub: (Int) -> Unit,
+    onFit: () -> Unit,
+    onUnmixToggle: () -> Unit,
+    onPixelToggle: () -> Unit
 ) {
     val latestDate = state.observations.maxByOrNull { it.date }?.date
 
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SourceProgressInline(state, state.sources.filter { it.enabled })
+
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("NDVI Movie", fontWeight = FontWeight.Medium)
                 Text(
@@ -313,6 +292,7 @@ private fun FramePanel(
                     )
                 }
             }
+
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconButton(onClick = onPlayPause, enabled = frameCount > 1) {
                     Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play")
@@ -326,49 +306,26 @@ private fun FramePanel(
                     enabled = frameCount > 1
                 )
             }
-        }
-    }
-}
 
-@Composable
-private fun LiveActionsSection(
-    state: AppState,
-    isUnmixing: Boolean,
-    isPixelFitRunning: Boolean,
-    onFit: () -> Unit,
-    onUnmixToggle: () -> Unit,
-    onPixelToggle: () -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(
-                onClick = onFit,
-                enabled = !state.loading,
-                border = BorderStroke(1.dp, Color(0xFFC9A227)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC9A227))
-            ) { Text("Fit") }
-            OutlinedButton(
-                onClick = onUnmixToggle,
-                border = BorderStroke(1.dp, Color(0xFF6D28D9)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF6D28D9))
-            ) { Text(if (isUnmixing) "Stop" else "Unmix") }
-            OutlinedButton(
-                onClick = onPixelToggle,
-                border = BorderStroke(1.dp, Color(0xFFD97706)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706))
-            ) { Text(if (isPixelFitRunning) "Stop" else "Per-Pixel") }
-        }
-    }
-}
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onFit,
+                    enabled = !state.loading,
+                    border = BorderStroke(1.dp, Color(0xFFC9A227)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC9A227))
+                ) { Text("Fit") }
+                OutlinedButton(
+                    onClick = onUnmixToggle,
+                    border = BorderStroke(1.dp, Color(0xFF6D28D9)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF6D28D9))
+                ) { Text(if (isUnmixing) "Stop" else "Unmix") }
+                OutlinedButton(
+                    onClick = onPixelToggle,
+                    border = BorderStroke(1.dp, Color(0xFFD97706)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706))
+                ) { Text(if (isPixelFitRunning) "Stop" else "Per-Pixel") }
+            }
 
-@Composable
-private fun NdviChartSection(state: AppState) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Median NDVI Time Series", fontWeight = FontWeight.Medium)
             if (state.observations.isEmpty()) {
                 Text("No observations yet")
@@ -384,37 +341,19 @@ private fun NdviChartSection(state: AppState) {
                     dynamicYScale = state.settings.dynamicYScale
                 )
             }
-        }
-    }
-}
 
-@Composable
-private fun ComparisonSection(state: AppState) {
-    val cmp = state.comparison ?: return
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
-            Text("Bias: ${"%.4f".format(cmp.ndviBias)}")
-            Text("RMSE: ${"%.4f".format(cmp.ndviRmse)}")
-            Text("R²: ${"%.3f".format(cmp.ndviR2)}")
-            Text("Samples: ${cmp.sampleCount}")
-        }
-    }
-}
+            state.comparison?.let { cmp ->
+                Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
+                Text("Bias: ${"%.4f".format(cmp.ndviBias)} | RMSE: ${"%.4f".format(cmp.ndviRmse)} | R²: ${"%.3f".format(cmp.ndviR2)}")
+            }
 
-@Composable
-private fun PhenologySection(state: AppState) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Phenology", fontWeight = FontWeight.Medium)
             val p = state.phenology
             if (p == null) {
                 Text("No fit yet")
             } else {
                 Text("mn=${"%.3f".format(p.mn)} mx=${"%.3f".format(p.mx)}")
-                Text("SOS=${p.sos.roundToInt()} EOS=${p.eos.roundToInt()}")
-                Text("rsp=${"%.3f".format(p.rsp)} rau=${"%.3f".format(p.rau)}")
-                Text("RMSE=${"%.4f".format(p.rmse)}")
+                Text("SOS=${p.sos.roundToInt()} EOS=${p.eos.roundToInt()} | RMSE=${"%.4f".format(p.rmse)}")
             }
             state.pixelSummary?.let { s ->
                 Text("Per-pixel: good ${s.good}, poor ${s.poor}, skipped ${s.skipped}")
@@ -424,8 +363,54 @@ private fun PhenologySection(state: AppState) {
 }
 
 @Composable
+private fun SourceProgressInline(state: AppState, enabledSources: List<SourceConfig>) {
+    if (enabledSources.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Source Progress", fontWeight = FontWeight.Medium)
+        enabledSources.forEachIndexed { idx, src ->
+            val progress = if (state.loading) 0.15f + ((idx + 1) * 0.17f % 0.7f) else 0f
+            Text(src.type.label, style = MaterialTheme.typography.bodySmall)
+            if (state.loading) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = AppBlue,
+                    trackColor = Color(0xFFE5E7EB)
+                )
+            } else {
+                Text("Idle", style = MaterialTheme.typography.bodySmall, color = AppSlate)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsPanel(
+    state: AppState,
+    onAoiChange: (AoiConfig) -> Unit,
+    onSettingsChange: (AppSettings) -> Unit,
+    onSourceToggle: (SourceConfig, Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AoiCard(state.aoi, onAoiChange)
+        SettingsCard(state.settings, onSettingsChange)
+        Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Data Sources", fontWeight = FontWeight.Medium)
+                state.sources.forEach { source ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = source.enabled, onCheckedChange = { onSourceToggle(source, it) })
+                        Text(source.type.label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun LogSection(logs: List<String>) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Log", fontWeight = FontWeight.Medium)
             if (logs.isEmpty()) Text("No activity yet")
@@ -437,32 +422,11 @@ private fun LogSection(logs: List<String>) {
 }
 
 @Composable
-private fun SourceRow(source: SourceConfig, onToggle: (Boolean) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(source.type.label, fontWeight = FontWeight.Medium)
-                val flags = buildString {
-                    append(if (source.type.supportsPixels) "Pixel fetch" else "Search only")
-                    if (source.type.requiresAuth) append(" • Auth")
-                }
-                Text(flags, style = MaterialTheme.typography.bodySmall)
-            }
-            Checkbox(checked = source.enabled, onCheckedChange = onToggle)
-        }
-    }
-}
-
-@Composable
 private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
     var lat by remember(aoi.latitude) { mutableStateOf(aoi.latitude.toString()) }
     var lon by remember(aoi.longitude) { mutableStateOf(aoi.longitude.toString()) }
 
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("AOI", fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -499,7 +463,7 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
 
 @Composable
 private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pipeline Settings", fontWeight = FontWeight.Medium)
 
@@ -587,12 +551,7 @@ private fun LineChart(
                 val x = i.toFloat() / (points.size - 1).toFloat() * w
                 val yLow = h - (((lows[i] - minY) / span).toFloat() * h)
                 val yHigh = h - (((highs[i] - minY) / span).toFloat() * h)
-                drawLine(
-                    color = Color(0x334A90E2),
-                    start = Offset(x, yLow),
-                    end = Offset(x, yHigh),
-                    strokeWidth = 4f
-                )
+                drawLine(color = Color(0x334A90E2), start = Offset(x, yLow), end = Offset(x, yHigh), strokeWidth = 4f)
             }
         }
 
