@@ -19,6 +19,16 @@
 
 ## Install / fix commands
 
+### 0) One-command Android SDK install (recommended)
+```bash
+./scripts/install_android_sdk.sh
+```
+This installs/updates `~/Library/Android/sdk` with:
+- `platform-tools`
+- `platforms;android-35`
+- `build-tools;35.0.0`
+- `cmdline-tools;latest`
+
 ### 1) Install Java 17 (if missing)
 ```bash
 brew install --cask temurin@17
