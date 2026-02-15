@@ -11,12 +11,14 @@ This Android repo is expected to stay derived from `../eof-ios`.
 
 ## Update Workflow (every iOS feature change)
 1. Pull latest iOS changes in `../eof-ios`.
-2. Run `scripts/check_ios_capability_drift.sh`.
-3. Update `docs/CAPABILITY_MATRIX.md` status for each impacted capability.
-4. Add or update Android tests for any changed behavior.
-5. Implement Android code changes.
-6. Re-run tests (`./gradlew test`).
-7. Commit with message prefix `sync(ios): ...`.
+2. Run `scripts/track_ios_changes.sh` to detect new commits and changed files since last sync.
+3. Run `scripts/check_ios_capability_drift.sh`.
+4. Update `docs/CAPABILITY_MATRIX.md` and `docs/IOS_CHANGE_QUEUE.md` for each impacted capability/change.
+5. Add or update Android tests for any changed behavior.
+6. Implement Android code changes.
+7. Re-run tests (`./gradlew test`).
+8. Record sync checkpoint: `scripts/track_ios_changes.sh --mark-synced`.
+9. Commit with message prefix `sync(ios): ...`.
 
 ## Stability Rules
 - Keep service interfaces stable so source adapters can be swapped without UI rewrites.

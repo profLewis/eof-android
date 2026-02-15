@@ -3,8 +3,11 @@
 ## Current automated tests
 - `NdviMathTest`: NDVI math and edge cases.
 - `PhenologyServiceTest`: double-logistic fitting returns valid parameters.
+- `PhenologyServiceEdgeCaseTest`: insufficient observations and curve-shape checks.
 - `SyntheticEOServiceTest`: synthetic fetch and source comparison metrics.
+- `SyntheticEOServiceEdgeCaseTest`: compare overlap/paired-sample failure paths.
 - `EORepositoryTest`: end-to-end state transitions for fetch/compare/fit flows.
+- `EORepositoryEdgeCaseTest`: source gating and minimum-observation guardrails.
 
 ## Test gates for parity
 1. Math gate:

@@ -24,6 +24,7 @@
 ./scripts/install_android_sdk.sh
 ```
 This installs/updates `~/Library/Android/sdk` with:
+- `emulator`
 - `platform-tools`
 - `platforms;android-35`
 - `build-tools;35.0.0`
@@ -59,6 +60,17 @@ Once Java/SDK are set:
 ```bash
 ./gradlew test
 ./gradlew installDebug
+```
+
+Emulator run helper:
+```bash
+./scripts/run_emulator.sh
+```
+
+Optional modes:
+```bash
+WAIT=1 ./scripts/run_emulator.sh
+LOGCAT=1 ./scripts/run_emulator.sh
 ```
 
 Notes:

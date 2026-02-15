@@ -57,6 +57,7 @@ echo "Using ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
 # Install baseline packages for this project.
 yes | "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null || true
 "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" \
+  "emulator" \
   "platform-tools" \
   "platforms;android-35" \
   "build-tools;35.0.0" \
@@ -66,4 +67,4 @@ echo
 echo "Android SDK installed at: $ANDROID_SDK_ROOT"
 echo "Add to your shell profile (e.g. ~/.zshrc):"
 echo "  export ANDROID_SDK_ROOT=\"$ANDROID_SDK_ROOT\""
-echo "  export PATH=\"$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:\$PATH\""
+echo "  export PATH=\"$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/emulator:\$PATH\""

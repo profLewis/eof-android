@@ -28,6 +28,17 @@ Primary reference: `../eof-ios/README.md`.
 - `app/src/test/java/uk/ac/ucl/eof/android`: unit tests
 - `scripts/check_ios_capability_drift.sh`: sync helper against iOS README
 
+## Documentation index
+- `docs/USER_GUIDE.md`: step-by-step usage and troubleshooting
+- `docs/DATA_SOURCES.md`: source capabilities, auth, and backend plans
+- `docs/METHODS.md`: NDVI/DVI, comparison metrics, phenology method
+- `docs/ARCHITECTURE.md`: module boundaries and runtime flow
+- `docs/CAPABILITY_MATRIX.md`: parity tracking against iOS features
+- `docs/IOS_SYNC.md`: process to keep Android derived from iOS changes
+- `docs/IOS_LAST_SYNC.txt`: last tracked `eof-ios` commit checkpoint
+- `docs/IOS_CHANGE_QUEUE.md`: pending iOS commits requiring Android parity work
+- `docs/TESTING.md`: test strategy and coverage plan
+
 ## How to run
 1. Open `eof-android` in Android Studio (latest stable).
 2. Let Gradle sync complete.
@@ -37,6 +48,21 @@ Command line (if SDK/Java are configured):
 ```bash
 ./gradlew test
 ./gradlew installDebug
+```
+
+One-command emulator + install + launch:
+```bash
+./scripts/run_emulator.sh
+```
+
+Keep script open after launch:
+```bash
+WAIT=1 ./scripts/run_emulator.sh
+```
+
+Stream filtered logs after launch:
+```bash
+LOGCAT=1 ./scripts/run_emulator.sh
 ```
 
 Environment prerequisites and auto-push setup are documented in `REQUIREMENTS.md`.
@@ -58,11 +84,13 @@ Detailed plan: `docs/TESTING.md`.
 
 ## Keeping parity with iOS
 For each iOS change:
-1. Run `scripts/check_ios_capability_drift.sh`.
-2. Update `docs/CAPABILITY_MATRIX.md`.
-3. Add tests for changed behavior.
-4. Implement Android updates.
-5. Run `./gradlew test`.
+1. Run `scripts/track_ios_changes.sh` to detect new iOS commits/files.
+2. Run `scripts/check_ios_capability_drift.sh`.
+3. Update `docs/CAPABILITY_MATRIX.md` and `docs/IOS_CHANGE_QUEUE.md`.
+4. Add tests for changed behavior.
+5. Implement Android updates.
+6. Run `./gradlew test`.
+7. Mark checkpoint when done: `scripts/track_ios_changes.sh --mark-synced`.
 
 ## Quick machine check
 Run:
