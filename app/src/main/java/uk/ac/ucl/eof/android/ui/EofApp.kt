@@ -3,6 +3,7 @@ package uk.ac.ucl.eof.android.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -28,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -36,8 +41,10 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,13 +54,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import uk.ac.ucl.eof.android.model.AoiConfig
 import uk.ac.ucl.eof.android.model.AppSettings
 import uk.ac.ucl.eof.android.model.AppState
+import uk.ac.ucl.eof.android.model.SourceConfig
 import kotlin.math.roundToInt
+
+private val AppBlue = Color(0xFF1E6BD6)
+private val AppSlate = Color(0xFF6B7280)
+private val AppBg = Color(0xFFF4F6F8)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,23 +74,55 @@ fun EofApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     var showSources by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showLog by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var playhead by remember { mutableStateOf(0) }
+    var isUnmixing by remember { mutableStateOf(false) }
+    var isPixelFitRunning by remember { mutableStateOf(false) }
+    val logs = remember { mutableStateListOf<String>() }
+
+    val groupedSeries = state.observations.groupBy { it.date }.toSortedMap().values.toList()
+    val frameCount = groupedSeries.size
+
+    fun addLog(msg: String) {
+        logs.add(0, msg)
+        if (logs.size > 20) logs.removeLast()
+    }
+
+    LaunchedEffect(state.status) {
+        if (state.status.isNotBlank()) addLog(state.status)
+    }
+
+    LaunchedEffect(frameCount) {
+        if (playhead >= frameCount) playhead = (frameCount - 1).coerceAtLeast(0)
+    }
+
+    LaunchedEffect(isPlaying, frameCount) {
+        while (isPlaying && frameCount > 1) {
+            delay(700)
+            playhead = (playhead + 1) % frameCount
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("EOF", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        addLog("Fetch requested")
+                        vm.fetch()
+                    }) { Icon(Icons.Default.Refresh, contentDescription = "Redo") }
+                },
                 actions = {
-                    IconButton(onClick = vm::fetch) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Fetch")
-                    }
                     IconButton(onClick = { showSources = !showSources }) {
                         Icon(Icons.Default.Storage, contentDescription = "Sources")
                     }
                     IconButton(onClick = { showSettings = !showSettings }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
-                    IconButton(onClick = vm::compare) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Compare")
+                    IconButton(onClick = { showLog = !showLog }) {
+                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Log")
                     }
                 }
             )
@@ -86,51 +131,77 @@ fun EofApp(vm: MainViewModel = viewModel()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF3F5F7))
+                .background(AppBg)
                 .padding(padding)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { HeaderSection(state) }
-            item { StatusSection(state, vm) }
+            item {
+                StatusSection(
+                    state = state,
+                    onFetch = {
+                        addLog("Fetch requested")
+                        vm.fetch()
+                    },
+                    onCompare = {
+                        addLog("Source comparison requested")
+                        vm.compare()
+                    }
+                )
+            }
+            item { SourceProgressSection(state, state.sources.filter { it.enabled }) }
             item { AoiCard(state.aoi) { vm.updateAoi(it) } }
-            item { FramePanel(state) }
+            item {
+                FramePanel(
+                    state = state,
+                    playhead = playhead,
+                    frameCount = frameCount,
+                    isPlaying = isPlaying,
+                    onPlayPause = {
+                        isPlaying = !isPlaying
+                        addLog(if (isPlaying) "Playback started" else "Playback paused")
+                    },
+                    onScrub = { playhead = it }
+                )
+            }
+            item {
+                LiveActionsSection(
+                    state = state,
+                    isUnmixing = isUnmixing,
+                    isPixelFitRunning = isPixelFitRunning,
+                    onFit = {
+                        addLog("Phenology fit requested")
+                        vm.fitPhenology()
+                    },
+                    onUnmixToggle = {
+                        isUnmixing = !isUnmixing
+                        addLog(if (isUnmixing) "Unmix started (placeholder)" else "Unmix stopped")
+                    },
+                    onPixelToggle = {
+                        isPixelFitRunning = !isPixelFitRunning
+                        addLog(if (isPixelFitRunning) "Per-pixel fit started (placeholder)" else "Per-pixel fit stopped")
+                    }
+                )
+            }
             item { NdviChartSection(state) }
             item { ComparisonSection(state) }
-            item { PhenologySection(state, vm) }
+            item { PhenologySection(state) }
 
             if (showSources) {
-                item {
-                    Text("Data Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                }
+                item { Text("Data Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium) }
                 items(items = state.sources, key = { it.type.name }) { source ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(source.type.label, fontWeight = FontWeight.Medium)
-                                val flags = buildString {
-                                    append(if (source.type.supportsPixels) "Pixel fetch" else "Search only")
-                                    if (source.type.requiresAuth) append(" • Auth")
-                                }
-                                Text(flags, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Checkbox(checked = source.enabled, onCheckedChange = { vm.toggleSource(source.type, it) })
-                        }
-                    }
+                    SourceRow(source = source, onToggle = { vm.toggleSource(source.type, it) })
                 }
             }
 
             if (showSettings) {
-                item {
-                    Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
-                }
+                item { Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium) }
                 item { SettingsCard(state.settings, vm::updateSettings) }
+            }
+
+            if (showLog) {
+                item { LogSection(logs) }
             }
         }
     }
@@ -138,10 +209,7 @@ fun EofApp(vm: MainViewModel = viewModel()) {
 
 @Composable
 private fun HeaderSection(state: AppState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val enabled = state.sources.filter { it.enabled }.joinToString("+") { it.type.name }
             Text(
@@ -159,35 +227,67 @@ private fun HeaderSection(state: AppState) {
 }
 
 @Composable
-private fun StatusSection(state: AppState, vm: MainViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+private fun StatusSection(state: AppState, onFetch: () -> Unit, onCompare: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.loading) {
-                    CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
-                }
+                if (state.loading) CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
                 Text(state.status, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = vm::fetch, enabled = !state.loading) { Text("Fetch") }
-                OutlinedButton(onClick = vm::compare, enabled = !state.loading) { Text("Compare") }
+                OutlinedButton(
+                    onClick = onFetch,
+                    enabled = !state.loading,
+                    border = BorderStroke(1.dp, AppBlue),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppBlue)
+                ) { Text("Fetch") }
+                OutlinedButton(
+                    onClick = onCompare,
+                    enabled = !state.loading,
+                    border = BorderStroke(1.dp, AppBlue),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AppBlue)
+                ) { Text("Compare") }
             }
         }
     }
 }
 
 @Composable
-private fun FramePanel(state: AppState) {
-    val frameCount = state.observations.groupBy { it.date }.size
+private fun SourceProgressSection(state: AppState, enabledSources: List<SourceConfig>) {
+    if (enabledSources.isEmpty()) return
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Source Progress", fontWeight = FontWeight.Medium)
+            enabledSources.forEachIndexed { idx, src ->
+                val progress = if (state.loading) 0.15f + ((idx + 1) * 0.17f % 0.7f) else 0f
+                Text(src.type.label, style = MaterialTheme.typography.bodySmall)
+                if (state.loading) {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = AppBlue,
+                        trackColor = Color(0xFFE5E7EB)
+                    )
+                } else {
+                    Text("Idle", style = MaterialTheme.typography.bodySmall, color = AppSlate)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FramePanel(
+    state: AppState,
+    playhead: Int,
+    frameCount: Int,
+    isPlaying: Boolean,
+    onPlayPause: () -> Unit,
+    onScrub: (Int) -> Unit
+) {
     val latestDate = state.observations.maxByOrNull { it.date }?.date
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("NDVI Movie", fontWeight = FontWeight.Medium)
@@ -197,42 +297,77 @@ private fun FramePanel(state: AppState) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(230.dp)
-                    .background(Color(0xFFF7F8FA))
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().height(230.dp).background(Color(0xFFF7F8FA))) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .fillMaxWidth(0.88f)
                         .height(200.dp)
                         .border(1.dp, Color(0xFFCFD8DC))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                listOf(Color(0xFFE8F5E9), Color(0xFFD7F0E9), Color(0xFFC6E7DF))
-                            )
-                        )
+                        .background(Brush.verticalGradient(listOf(Color(0xFFE8F5E9), Color(0xFFD7F0E9), Color(0xFFC6E7DF))))
                 ) {
                     Text(
-                        if (state.observations.isEmpty()) "Fetch data to render frame panel"
-                        else "Frame preview placeholder (map/raster renderer slot)",
+                        if (state.observations.isEmpty()) "Fetch data to render frame panel" else "Frame ${playhead + 1} preview (renderer slot)",
                         modifier = Modifier.align(Alignment.Center),
                         color = Color(0xFF004D40)
                     )
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(onClick = onPlayPause, enabled = frameCount > 1) {
+                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = "Play")
+                }
+                Text("${(playhead + 1).coerceAtMost(frameCount.coerceAtLeast(1))}/${frameCount.coerceAtLeast(1)}", style = MaterialTheme.typography.bodySmall)
+                Slider(
+                    value = playhead.toFloat(),
+                    onValueChange = { onScrub(it.roundToInt().coerceIn(0, (frameCount - 1).coerceAtLeast(0))) },
+                    valueRange = 0f..(frameCount - 1).coerceAtLeast(0).toFloat(),
+                    modifier = Modifier.weight(1f),
+                    enabled = frameCount > 1
+                )
             }
         }
     }
 }
 
 @Composable
+private fun LiveActionsSection(
+    state: AppState,
+    isUnmixing: Boolean,
+    isPixelFitRunning: Boolean,
+    onFit: () -> Unit,
+    onUnmixToggle: () -> Unit,
+    onPixelToggle: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onFit,
+                enabled = !state.loading,
+                border = BorderStroke(1.dp, Color(0xFFC9A227)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFC9A227))
+            ) { Text("Fit") }
+            OutlinedButton(
+                onClick = onUnmixToggle,
+                border = BorderStroke(1.dp, Color(0xFF6D28D9)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF6D28D9))
+            ) { Text(if (isUnmixing) "Stop" else "Unmix") }
+            OutlinedButton(
+                onClick = onPixelToggle,
+                border = BorderStroke(1.dp, Color(0xFFD97706)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706))
+            ) { Text(if (isPixelFitRunning) "Stop" else "Per-Pixel") }
+        }
+    }
+}
+
+@Composable
 private fun NdviChartSection(state: AppState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Median NDVI Time Series", fontWeight = FontWeight.Medium)
             if (state.observations.isEmpty()) {
@@ -256,10 +391,7 @@ private fun NdviChartSection(state: AppState) {
 @Composable
 private fun ComparisonSection(state: AppState) {
     val cmp = state.comparison ?: return
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
             Text("Bias: ${"%.4f".format(cmp.ndviBias)}")
@@ -271,18 +403,10 @@ private fun ComparisonSection(state: AppState) {
 }
 
 @Composable
-private fun PhenologySection(state: AppState, vm: MainViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+private fun PhenologySection(state: AppState) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Phenology", fontWeight = FontWeight.Medium)
-                Spacer(Modifier.weight(1f))
-                Button(onClick = vm::fitPhenology, enabled = !state.loading) { Text("Fit") }
-            }
-
+            Text("Phenology", fontWeight = FontWeight.Medium)
             val p = state.phenology
             if (p == null) {
                 Text("No fit yet")
@@ -292,10 +416,43 @@ private fun PhenologySection(state: AppState, vm: MainViewModel) {
                 Text("rsp=${"%.3f".format(p.rsp)} rau=${"%.3f".format(p.rau)}")
                 Text("RMSE=${"%.4f".format(p.rmse)}")
             }
-
             state.pixelSummary?.let { s ->
                 Text("Per-pixel: good ${s.good}, poor ${s.poor}, skipped ${s.skipped}")
             }
+        }
+    }
+}
+
+@Composable
+private fun LogSection(logs: List<String>) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Log", fontWeight = FontWeight.Medium)
+            if (logs.isEmpty()) Text("No activity yet")
+            logs.take(8).forEach { msg ->
+                Text("• $msg", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceRow(source: SourceConfig, onToggle: (Boolean) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(source.type.label, fontWeight = FontWeight.Medium)
+                val flags = buildString {
+                    append(if (source.type.supportsPixels) "Pixel fetch" else "Search only")
+                    if (source.type.requiresAuth) append(" • Auth")
+                }
+                Text(flags, style = MaterialTheme.typography.bodySmall)
+            }
+            Checkbox(checked = source.enabled, onCheckedChange = onToggle)
         }
     }
 }
@@ -305,10 +462,7 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
     var lat by remember(aoi.latitude) { mutableStateOf(aoi.latitude.toString()) }
     var lon by remember(aoi.longitude) { mutableStateOf(aoi.longitude.toString()) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("AOI", fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -345,10 +499,7 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
 
 @Composable
 private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pipeline Settings", fontWeight = FontWeight.Medium)
 
@@ -374,37 +525,25 @@ private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit)
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = settings.sclMaskEnabled,
-                    onCheckedChange = { onChange(settings.copy(sclMaskEnabled = it)) }
-                )
+                Checkbox(checked = settings.sclMaskEnabled, onCheckedChange = { onChange(settings.copy(sclMaskEnabled = it)) })
                 Spacer(Modifier.width(6.dp))
                 Text("Enable SCL/Fmask cloud filtering")
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = settings.useDvi,
-                    onCheckedChange = { onChange(settings.copy(useDvi = it)) }
-                )
+                Checkbox(checked = settings.useDvi, onCheckedChange = { onChange(settings.copy(useDvi = it)) })
                 Spacer(Modifier.width(6.dp))
                 Text("Use DVI instead of NDVI")
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = settings.showSpectralEnvelope,
-                    onCheckedChange = { onChange(settings.copy(showSpectralEnvelope = it)) }
-                )
+                Checkbox(checked = settings.showSpectralEnvelope, onCheckedChange = { onChange(settings.copy(showSpectralEnvelope = it)) })
                 Spacer(Modifier.width(6.dp))
                 Text("Show NDVI envelope (min/max)")
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = settings.dynamicYScale,
-                    onCheckedChange = { onChange(settings.copy(dynamicYScale = it)) }
-                )
+                Checkbox(checked = settings.dynamicYScale, onCheckedChange = { onChange(settings.copy(dynamicYScale = it)) })
                 Spacer(Modifier.width(6.dp))
                 Text("Dynamic Y scale")
             }
@@ -436,11 +575,7 @@ private fun LineChart(
     }
     val span = (maxY - minY).takeIf { it > 1e-9 } ?: 1.0
 
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(190.dp)
-    ) {
+    Canvas(modifier = modifier.fillMaxWidth().height(190.dp)) {
         val w = size.width
         val h = size.height
 
@@ -466,12 +601,7 @@ private fun LineChart(
             val x1 = i.toFloat() / (points.size - 1).toFloat() * w
             val y0 = h - (((points[i - 1] - minY) / span).toFloat() * h)
             val y1 = h - (((points[i] - minY) / span).toFloat() * h)
-            drawLine(
-                color = Color(0xFF00695C),
-                start = Offset(x0, y0),
-                end = Offset(x1, y1),
-                strokeWidth = 4f
-            )
+            drawLine(color = Color(0xFF00695C), start = Offset(x0, y0), end = Offset(x1, y1), strokeWidth = 4f)
         }
     }
 }
