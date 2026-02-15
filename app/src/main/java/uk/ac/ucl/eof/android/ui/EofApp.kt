@@ -1,7 +1,9 @@
 package uk.ac.ucl.eof.android.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,34 +13,35 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,183 +51,220 @@ import uk.ac.ucl.eof.android.model.AppSettings
 import uk.ac.ucl.eof.android.model.AppState
 import kotlin.math.roundToInt
 
-private enum class Tab(val label: String) {
-    FETCH("Fetch"),
-    SOURCES("Sources"),
-    PHENOLOGY("Phenology"),
-    SETTINGS("Settings")
-}
-
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun EofApp(vm: MainViewModel = viewModel()) {
     val state by vm.state.collectAsState()
-    var tab by rememberSaveable { mutableStateOf(Tab.FETCH) }
+    var showSources by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
 
     Scaffold(
-        bottomBar = {
-            NavigationBar {
-                listOf(
-                    Tab.FETCH to Icons.Default.CloudDownload,
-                    Tab.SOURCES to Icons.Default.Storage,
-                    Tab.PHENOLOGY to Icons.Default.Analytics,
-                    Tab.SETTINGS to Icons.Default.Settings
-                ).forEach { (t, icon) ->
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = { Icon(icon, contentDescription = t.label) },
-                        label = { Text(t.label) }
-                    )
+        topBar = {
+            TopAppBar(
+                title = { Text("EOF", fontWeight = FontWeight.SemiBold) },
+                actions = {
+                    IconButton(onClick = vm::fetch) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Fetch")
+                    }
+                    IconButton(onClick = { showSources = !showSources }) {
+                        Icon(Icons.Default.Storage, contentDescription = "Sources")
+                    }
+                    IconButton(onClick = { showSettings = !showSettings }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                    }
+                    IconButton(onClick = vm::compare) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Compare")
+                    }
                 }
-            }
+            )
         }
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            item {
-                Text("EOF Android", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+            item { HeaderSection(state) }
+            item { StatusSection(state, vm) }
+            item { AoiCard(state.aoi) { vm.updateAoi(it) } }
+            item { FramePanel(state) }
+            item { NdviChartSection(state) }
+            item { ComparisonSection(state) }
+            item { PhenologySection(state, vm) }
+
+            if (showSources) {
+                item {
+                    Text("Data Sources", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                }
+                items(items = state.sources, key = { it.type.name }) { source ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(source.type.label, fontWeight = FontWeight.Medium)
+                                val flags = buildString {
+                                    append(if (source.type.supportsPixels) "Pixel fetch" else "Search only")
+                                    if (source.type.requiresAuth) append(" • Auth")
+                                }
+                                Text(flags, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Checkbox(checked = source.enabled, onCheckedChange = { vm.toggleSource(source.type, it) })
+                        }
+                    }
+                }
+            }
+
+            if (showSettings) {
+                item {
+                    Text("Settings", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium)
+                }
+                item { SettingsCard(state.settings, vm::updateSettings) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeaderSection(state: AppState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val enabled = state.sources.filter { it.enabled }.joinToString("+") { it.type.name }
+            Text(
+                "S2 NDVI | ${state.aoi.dateStart}–${state.aoi.dateEnd} | ${enabled.ifBlank { "No source" }}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "AOI: lat ${"%.3f".format(state.aoi.latitude)}, lon ${"%.3f".format(state.aoi.longitude)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusSection(state: AppState, vm: MainViewModel) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.loading) {
+                    CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
+                }
                 Text(state.status, style = MaterialTheme.typography.bodyMedium)
             }
-
-            when (tab) {
-                Tab.FETCH -> fetchScreen(state, vm)
-                Tab.SOURCES -> sourcesScreen(state, vm)
-                Tab.PHENOLOGY -> phenologyScreen(state, vm)
-                Tab.SETTINGS -> settingsScreen(state, vm)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = vm::fetch, enabled = !state.loading) { Text("Fetch Data") }
+                Button(onClick = vm::compare, enabled = !state.loading) { Text("Compare Sources") }
             }
         }
     }
 }
 
-private fun LazyListScope.fetchScreen(state: AppState, vm: MainViewModel) {
-    item {
-        AoiCard(state.aoi) { vm.updateAoi(it) }
-    }
-    item {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = vm::fetch, enabled = !state.loading) {
-                Text("Fetch")
-            }
-            Button(onClick = vm::compare, enabled = !state.loading) {
-                Text("Compare Sources")
-            }
-        }
-    }
-    item {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Median NDVI Time Series", fontWeight = FontWeight.Medium)
-                if (state.observations.isEmpty()) {
-                    Text("No observations yet")
-                } else {
-                    val grouped = state.observations.groupBy { it.date }
-                        .toSortedMap()
-                        .values
-                    val medianSeries = grouped.map { pts -> median(pts.map { it.ndvi }) }
-                    val lowSeries = grouped.map { pts -> pts.minOf { it.ndvi } }
-                    val highSeries = grouped.map { pts -> pts.maxOf { it.ndvi } }
-                    LineChart(
-                        points = medianSeries,
-                        lows = if (state.settings.showSpectralEnvelope) lowSeries else null,
-                        highs = if (state.settings.showSpectralEnvelope) highSeries else null,
-                        dynamicYScale = state.settings.dynamicYScale
-                    )
-                }
-            }
-        }
-    }
-    state.comparison?.let { cmp ->
-        item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
-                    Text("Bias: ${"%.4f".format(cmp.ndviBias)}")
-                    Text("RMSE: ${"%.4f".format(cmp.ndviRmse)}")
-                    Text("R²: ${"%.3f".format(cmp.ndviR2)}")
-                    Text("Samples: ${cmp.sampleCount}")
-                }
-            }
-        }
-    }
-}
+@Composable
+private fun FramePanel(state: AppState) {
+    val frameCount = state.observations.groupBy { it.date }.size
+    val latestDate = state.observations.maxByOrNull { it.date }?.date
 
-private fun LazyListScope.sourcesScreen(state: AppState, vm: MainViewModel) {
-    item {
-        Text("Data Sources", style = MaterialTheme.typography.titleMedium)
-    }
-    items(items = state.sources, key = { it.type.name }) { source ->
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Row(
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("NDVI Movie", fontWeight = FontWeight.Medium)
+                Text(
+                    if (latestDate == null) "No frames" else "$latestDate • ${frameCount} frames",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .height(230.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(Color(0xFFE8F5E9), Color(0xFFB2DFDB), Color(0xFF80CBC4))
+                        )
+                    )
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text(source.type.label, fontWeight = FontWeight.Medium)
-                    val flags = buildString {
-                        append(if (source.type.supportsPixels) "Pixel fetch" else "Search only")
-                        if (source.type.requiresAuth) append(" • Auth")
-                    }
-                    Text(flags, style = MaterialTheme.typography.bodySmall)
-                }
-                Checkbox(checked = source.enabled, onCheckedChange = { vm.toggleSource(source.type, it) })
+                Text(
+                    if (state.observations.isEmpty()) "Fetch data to render frame panel"
+                    else "Frame preview placeholder (map/raster renderer slot)",
+                    modifier = Modifier.align(Alignment.Center),
+                    color = Color(0xFF004D40)
+                )
             }
         }
     }
 }
 
-private fun LazyListScope.phenologyScreen(state: AppState, vm: MainViewModel) {
-    item {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = vm::fitPhenology, enabled = !state.loading) { Text("Fit Phenology") }
-        }
-    }
-    item {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Double Logistic", fontWeight = FontWeight.Medium)
-                val p = state.phenology
-                if (p == null) {
-                    Text("No fit yet")
-                } else {
-                    Text("mn=${"%.3f".format(p.mn)} mx=${"%.3f".format(p.mx)}")
-                    Text("SOS=${p.sos.roundToInt()} EOS=${p.eos.roundToInt()}")
-                    Text("rsp=${"%.3f".format(p.rsp)} rau=${"%.3f".format(p.rau)}")
-                    Text("RMSE=${"%.4f".format(p.rmse)}")
-                }
-            }
-        }
-    }
-    state.pixelSummary?.let { s ->
-        item {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Per-Pixel Fit Summary", fontWeight = FontWeight.Medium)
-                    Text("Good: ${s.good}")
-                    Text("Poor: ${s.poor}")
-                    Text("Skipped: ${s.skipped}")
-                }
+@Composable
+private fun NdviChartSection(state: AppState) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Median NDVI Time Series", fontWeight = FontWeight.Medium)
+            if (state.observations.isEmpty()) {
+                Text("No observations yet")
+            } else {
+                val grouped = state.observations.groupBy { it.date }.toSortedMap().values
+                val medianSeries = grouped.map { pts -> median(pts.map { it.ndvi }) }
+                val lowSeries = grouped.map { pts -> pts.minOf { it.ndvi } }
+                val highSeries = grouped.map { pts -> pts.maxOf { it.ndvi } }
+                LineChart(
+                    points = medianSeries,
+                    lows = if (state.settings.showSpectralEnvelope) lowSeries else null,
+                    highs = if (state.settings.showSpectralEnvelope) highSeries else null,
+                    dynamicYScale = state.settings.dynamicYScale
+                )
             }
         }
     }
 }
 
-private fun LazyListScope.settingsScreen(state: AppState, vm: MainViewModel) {
-    item {
-        SettingsCard(state.settings, vm::updateSettings)
+@Composable
+private fun ComparisonSection(state: AppState) {
+    val cmp = state.comparison ?: return
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
+            Text("Bias: ${"%.4f".format(cmp.ndviBias)}")
+            Text("RMSE: ${"%.4f".format(cmp.ndviRmse)}")
+            Text("R²: ${"%.3f".format(cmp.ndviR2)}")
+            Text("Samples: ${cmp.sampleCount}")
+        }
     }
-    item {
-        Text(
-            "This Android baseline mirrors the iOS architecture (AOI, sources, comparison, phenology) and is ready for real STAC/COG service adapters.",
-            style = MaterialTheme.typography.bodySmall
-        )
+}
+
+@Composable
+private fun PhenologySection(state: AppState, vm: MainViewModel) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Phenology", fontWeight = FontWeight.Medium)
+                Spacer(Modifier.weight(1f))
+                Button(onClick = vm::fitPhenology, enabled = !state.loading) { Text("Fit") }
+            }
+
+            val p = state.phenology
+            if (p == null) {
+                Text("No fit yet")
+            } else {
+                Text("mn=${"%.3f".format(p.mn)} mx=${"%.3f".format(p.mx)}")
+                Text("SOS=${p.sos.roundToInt()} EOS=${p.eos.roundToInt()}")
+                Text("rsp=${"%.3f".format(p.rsp)} rau=${"%.3f".format(p.rau)}")
+                Text("RMSE=${"%.4f".format(p.rmse)}")
+            }
+
+            state.pixelSummary?.let { s ->
+                Text("Per-pixel: good ${s.good}, poor ${s.poor}, skipped ${s.skipped}")
+            }
+        }
     }
 }
 
@@ -361,7 +401,7 @@ private fun LineChart(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(190.dp)
     ) {
         val w = size.width
         val h = size.height
