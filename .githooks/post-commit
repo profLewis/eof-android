@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Opt-in: enable with `git config hooks.autopush true`
+if [[ "$(git config --bool hooks.autopush || echo false)" != "true" ]]; then
+  exit 0
+fi
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
+  exit 0
+fi
+
+if ! git remote get-url origin >/dev/null 2>&1; then
+  echo "[post-commit] No origin remote; skipping auto-push"
+  exit 0
+fi
+
+echo "[post-commit] Auto-pushing ${branch} -> origin/${branch}"
+git push -u origin "${branch}"
