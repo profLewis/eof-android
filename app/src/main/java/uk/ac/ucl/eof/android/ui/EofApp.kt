@@ -65,7 +65,7 @@ import kotlin.math.roundToInt
 private val AppBlue = Color(0xFF1E6BD6)
 private val AppSlate = Color(0xFF6B7280)
 private val AppBg = Color(0xFFF4F6F8)
-private val CardShape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+private val CardShape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -129,7 +129,7 @@ fun EofApp(vm: MainViewModel = viewModel()) {
                 .background(AppBg)
                 .padding(padding)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             item { HeaderSection(state) }
             item {
@@ -211,7 +211,7 @@ fun EofApp(vm: MainViewModel = viewModel()) {
 @Composable
 private fun HeaderSection(state: AppState) {
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val enabled = state.sources.filter { it.enabled }.joinToString("+") { it.type.name }
             Text(
                 "S2 NDVI | ${state.aoi.dateStart}–${state.aoi.dateEnd} | ${enabled.ifBlank { "No source" }}",
@@ -230,7 +230,7 @@ private fun HeaderSection(state: AppState) {
 @Composable
 private fun StatusSection(state: AppState, onFetch: () -> Unit, onCompare: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.loading) CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
                 Text(state.status, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
@@ -270,7 +270,7 @@ private fun AnalysisPanel(
     val latestDate = state.observations.maxByOrNull { it.date }?.date
 
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SourceProgressInline(state, state.sources.filter { it.enabled })
 
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -281,12 +281,12 @@ private fun AnalysisPanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Box(modifier = Modifier.fillMaxWidth().height(230.dp).background(Color(0xFFF7F8FA))) {
+            Box(modifier = Modifier.fillMaxWidth().height(218.dp).background(Color(0xFFF7F8FA))) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .fillMaxWidth(0.88f)
-                        .height(200.dp)
+                        .height(186.dp)
                         .border(1.dp, Color(0xFFCFD8DC))
                         .background(Brush.verticalGradient(listOf(Color(0xFFE8F5E9), Color(0xFFD7F0E9), Color(0xFFC6E7DF))))
                 ) {
@@ -396,11 +396,11 @@ private fun SettingsPanel(
     onSettingsChange: (AppSettings) -> Unit,
     onSourceToggle: (SourceConfig, Boolean) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         AoiCard(state.aoi, onAoiChange)
         SettingsCard(state.settings, onSettingsChange)
         Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Data Sources", fontWeight = FontWeight.Medium)
                 state.sources.forEach { source ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -416,7 +416,7 @@ private fun SettingsPanel(
 @Composable
 private fun LogSection(logs: List<String>) {
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Log", fontWeight = FontWeight.Medium)
             if (logs.isEmpty()) Text("No activity yet")
             logs.take(8).forEach { msg ->
@@ -432,7 +432,7 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
     var lon by remember(aoi.longitude) { mutableStateOf(aoi.longitude.toString()) }
 
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("AOI", fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -469,7 +469,7 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
 @Composable
 private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit) {
     Card(modifier = Modifier.fillMaxWidth(), shape = CardShape, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Pipeline Settings", fontWeight = FontWeight.Medium)
 
             Text("Max concurrency: ${settings.maxConcurrency}")
