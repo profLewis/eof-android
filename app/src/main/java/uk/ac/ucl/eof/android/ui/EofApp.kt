@@ -122,11 +122,18 @@ private fun LazyListScope.fetchScreen(state: AppState, vm: MainViewModel) {
                 if (state.observations.isEmpty()) {
                     Text("No observations yet")
                 } else {
-                    val medianSeries = state.observations.groupBy { it.date }
+                    val grouped = state.observations.groupBy { it.date }
                         .toSortedMap()
                         .values
-                        .map { pts -> pts.map { it.ndvi }.average() }
-                    LineChart(points = medianSeries)
+                    val medianSeries = grouped.map { pts -> median(pts.map { it.ndvi }) }
+                    val lowSeries = grouped.map { pts -> pts.minOf { it.ndvi } }
+                    val highSeries = grouped.map { pts -> pts.maxOf { it.ndvi } }
+                    LineChart(
+                        points = medianSeries,
+                        lows = if (state.settings.showSpectralEnvelope) lowSeries else null,
+                        highs = if (state.settings.showSpectralEnvelope) highSeries else null,
+                        dynamicYScale = state.settings.dynamicYScale
+                    )
                 }
             }
         }
@@ -305,18 +312,50 @@ private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit)
                 Spacer(Modifier.width(6.dp))
                 Text("Use DVI instead of NDVI")
             }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = settings.showSpectralEnvelope,
+                    onCheckedChange = { onChange(settings.copy(showSpectralEnvelope = it)) }
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Show NDVI envelope (min/max)")
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = settings.dynamicYScale,
+                    onCheckedChange = { onChange(settings.copy(dynamicYScale = it)) }
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Dynamic Y scale")
+            }
         }
     }
 }
 
 @Composable
-private fun LineChart(points: List<Double>, modifier: Modifier = Modifier) {
+private fun LineChart(
+    points: List<Double>,
+    lows: List<Double>? = null,
+    highs: List<Double>? = null,
+    dynamicYScale: Boolean = true,
+    modifier: Modifier = Modifier
+) {
     if (points.size < 2) {
         Text("Insufficient data")
         return
     }
-    val minY = points.minOrNull() ?: 0.0
-    val maxY = points.maxOrNull() ?: 1.0
+    val minY = if (dynamicYScale) {
+        sequenceOf(points.minOrNull(), lows?.minOrNull(), highs?.minOrNull()).filterNotNull().minOrNull() ?: -0.2
+    } else {
+        -0.2
+    }
+    val maxY = if (dynamicYScale) {
+        sequenceOf(points.maxOrNull(), lows?.maxOrNull(), highs?.maxOrNull()).filterNotNull().maxOrNull() ?: 1.0
+    } else {
+        1.0
+    }
     val span = (maxY - minY).takeIf { it > 1e-9 } ?: 1.0
 
     Canvas(
@@ -329,6 +368,20 @@ private fun LineChart(points: List<Double>, modifier: Modifier = Modifier) {
 
         drawLine(Color.Gray, Offset(0f, h - 1), Offset(w, h - 1), 1f)
         drawLine(Color.Gray, Offset(1f, 0f), Offset(1f, h), 1f)
+
+        if (lows != null && highs != null && lows.size == points.size && highs.size == points.size) {
+            for (i in lows.indices) {
+                val x = i.toFloat() / (points.size - 1).toFloat() * w
+                val yLow = h - (((lows[i] - minY) / span).toFloat() * h)
+                val yHigh = h - (((highs[i] - minY) / span).toFloat() * h)
+                drawLine(
+                    color = Color(0x334A90E2),
+                    start = Offset(x, yLow),
+                    end = Offset(x, yHigh),
+                    strokeWidth = 4f
+                )
+            }
+        }
 
         for (i in 1 until points.size) {
             val x0 = (i - 1).toFloat() / (points.size - 1).toFloat() * w
@@ -343,4 +396,11 @@ private fun LineChart(points: List<Double>, modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+private fun median(values: List<Double>): Double {
+    if (values.isEmpty()) return 0.0
+    val sorted = values.sorted()
+    val mid = sorted.size / 2
+    return if (sorted.size % 2 == 0) (sorted[mid - 1] + sorted[mid]) / 2.0 else sorted[mid]
 }

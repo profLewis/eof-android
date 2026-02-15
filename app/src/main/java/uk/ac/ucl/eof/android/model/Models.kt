@@ -32,7 +32,9 @@ data class AppSettings(
     val useDvi: Boolean = false,
     val sclMaskEnabled: Boolean = true,
     val minObservations: Int = 4,
-    val ensembleRuns: Int = 8
+    val ensembleRuns: Int = 8,
+    val showSpectralEnvelope: Boolean = true,
+    val dynamicYScale: Boolean = true
 )
 
 data class Observation(

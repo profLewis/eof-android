@@ -2,20 +2,26 @@
 
 Tracks `eof-ios` changes detected by `scripts/track_ios_changes.sh` that still need Android parity work.
 
-## Pending
+## Status
+- Generated: 2026-02-15 18:35 UTC
+- Last synced iOS commit: 
+ac1b5d813ad9674bca9125297eb1b98701a537bc2
+- Current iOS HEAD: 
+ae463b913f3bbd1b7e56f8e85494073f760c182be
 
-### dbb4c970ca93a2c339a7a3c57afd832da61c7b95 (2026-02-15)
-- Commit: `Improve spectral plot with median, envelope, and dynamic Y scale`
-- Files changed in `eof-ios`:
-  - `eof/Models/AppSettings.swift`
-  - `eof/Views/ContentView.swift`
-  - `eof/Views/SettingsView.swift`
-- Android parity status: pending
-- Planned Android follow-up:
-  - Add spectral plot median + envelope rendering support in Android UI chart components.
-  - Add settings toggles/ranges for dynamic Y scaling behavior.
-  - Add regression tests for plot scaling and summary statistics.
+## Pending iOS commits
+- `e463b91` 2026-02-15 Add Unmix button, auto re-fit on dlFitTarget change, show fractions on chart
+- `7bced5a` 2026-02-15 Center movie frame vertically and horizontally in container
+- `dbb4c97` 2026-02-15 Improve spectral plot with median, envelope, and dynamic Y scale
 
-## Cleared
+## Changed files since last sync
+- `eof/Models/AppSettings.swift`
+- `eof/Views/ContentView.swift`
+- `eof/Views/SettingsView.swift`
 
-- None yet.
+## Android action checklist
+- Update `docs/CAPABILITY_MATRIX.md` for impacted capabilities.
+- Add/adjust Android tests before implementation.
+- Implement parity changes.
+- Run `./gradlew test`.
+- Mark synced when complete: `./scripts/track_ios_changes.sh --mark-synced`.
