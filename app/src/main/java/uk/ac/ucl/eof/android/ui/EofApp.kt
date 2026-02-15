@@ -2,6 +2,7 @@ package uk.ac.ucl.eof.android.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +22,14 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -44,6 +47,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import uk.ac.ucl.eof.android.model.AoiConfig
@@ -82,9 +86,10 @@ fun EofApp(vm: MainViewModel = viewModel()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF3F5F7))
                 .padding(padding)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { HeaderSection(state) }
             item { StatusSection(state, vm) }
@@ -133,17 +138,20 @@ fun EofApp(vm: MainViewModel = viewModel()) {
 
 @Composable
 private fun HeaderSection(state: AppState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             val enabled = state.sources.filter { it.enabled }.joinToString("+") { it.type.name }
             Text(
                 "S2 NDVI | ${state.aoi.dateStart}–${state.aoi.dateEnd} | ${enabled.ifBlank { "No source" }}",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 "AOI: lat ${"%.3f".format(state.aoi.latitude)}, lon ${"%.3f".format(state.aoi.longitude)}",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -152,17 +160,20 @@ private fun HeaderSection(state: AppState) {
 
 @Composable
 private fun StatusSection(state: AppState, vm: MainViewModel) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.loading) {
                     CircularProgressIndicator(modifier = Modifier.width(16.dp), strokeWidth = 2.dp)
                 }
-                Text(state.status, style = MaterialTheme.typography.bodyMedium)
+                Text(state.status, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = vm::fetch, enabled = !state.loading) { Text("Fetch Data") }
-                Button(onClick = vm::compare, enabled = !state.loading) { Text("Compare Sources") }
+                OutlinedButton(onClick = vm::fetch, enabled = !state.loading) { Text("Fetch") }
+                OutlinedButton(onClick = vm::compare, enabled = !state.loading) { Text("Compare") }
             }
         }
     }
@@ -173,7 +184,10 @@ private fun FramePanel(state: AppState) {
     val frameCount = state.observations.groupBy { it.date }.size
     val latestDate = state.observations.maxByOrNull { it.date }?.date
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("NDVI Movie", fontWeight = FontWeight.Medium)
@@ -187,18 +201,27 @@ private fun FramePanel(state: AppState) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(230.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(Color(0xFFE8F5E9), Color(0xFFB2DFDB), Color(0xFF80CBC4))
-                        )
-                    )
+                    .background(Color(0xFFF7F8FA))
             ) {
-                Text(
-                    if (state.observations.isEmpty()) "Fetch data to render frame panel"
-                    else "Frame preview placeholder (map/raster renderer slot)",
-                    modifier = Modifier.align(Alignment.Center),
-                    color = Color(0xFF004D40)
-                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth(0.88f)
+                        .height(200.dp)
+                        .border(1.dp, Color(0xFFCFD8DC))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                listOf(Color(0xFFE8F5E9), Color(0xFFD7F0E9), Color(0xFFC6E7DF))
+                            )
+                        )
+                ) {
+                    Text(
+                        if (state.observations.isEmpty()) "Fetch data to render frame panel"
+                        else "Frame preview placeholder (map/raster renderer slot)",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = Color(0xFF004D40)
+                    )
+                }
             }
         }
     }
@@ -206,7 +229,10 @@ private fun FramePanel(state: AppState) {
 
 @Composable
 private fun NdviChartSection(state: AppState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Median NDVI Time Series", fontWeight = FontWeight.Medium)
             if (state.observations.isEmpty()) {
@@ -230,7 +256,10 @@ private fun NdviChartSection(state: AppState) {
 @Composable
 private fun ComparisonSection(state: AppState) {
     val cmp = state.comparison ?: return
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("${cmp.sourceA.label} vs ${cmp.sourceB.label}", fontWeight = FontWeight.Medium)
             Text("Bias: ${"%.4f".format(cmp.ndviBias)}")
@@ -243,7 +272,10 @@ private fun ComparisonSection(state: AppState) {
 
 @Composable
 private fun PhenologySection(state: AppState, vm: MainViewModel) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Phenology", fontWeight = FontWeight.Medium)
@@ -273,7 +305,10 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
     var lat by remember(aoi.latitude) { mutableStateOf(aoi.latitude.toString()) }
     var lon by remember(aoi.longitude) { mutableStateOf(aoi.longitude.toString()) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("AOI", fontWeight = FontWeight.Medium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -310,7 +345,10 @@ private fun AoiCard(aoi: AoiConfig, onChange: (AoiConfig) -> Unit) {
 
 @Composable
 private fun SettingsCard(settings: AppSettings, onChange: (AppSettings) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Pipeline Settings", fontWeight = FontWeight.Medium)
 
