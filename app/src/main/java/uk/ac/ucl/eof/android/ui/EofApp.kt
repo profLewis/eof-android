@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyColumnScope
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
@@ -101,7 +101,7 @@ fun EofApp(vm: MainViewModel = viewModel()) {
     }
 }
 
-private fun LazyColumnScope.fetchScreen(state: AppState, vm: MainViewModel) {
+private fun LazyListScope.fetchScreen(state: AppState, vm: MainViewModel) {
     item {
         AoiCard(state.aoi) { vm.updateAoi(it) }
     }
@@ -146,11 +146,11 @@ private fun LazyColumnScope.fetchScreen(state: AppState, vm: MainViewModel) {
     }
 }
 
-private fun LazyColumnScope.sourcesScreen(state: AppState, vm: MainViewModel) {
+private fun LazyListScope.sourcesScreen(state: AppState, vm: MainViewModel) {
     item {
         Text("Data Sources", style = MaterialTheme.typography.titleMedium)
     }
-    items(state.sources) { source ->
+    items(items = state.sources, key = { it.type.name }) { source ->
         Card(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
@@ -173,7 +173,7 @@ private fun LazyColumnScope.sourcesScreen(state: AppState, vm: MainViewModel) {
     }
 }
 
-private fun LazyColumnScope.phenologyScreen(state: AppState, vm: MainViewModel) {
+private fun LazyListScope.phenologyScreen(state: AppState, vm: MainViewModel) {
     item {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = vm::fitPhenology, enabled = !state.loading) { Text("Fit Phenology") }
@@ -209,7 +209,7 @@ private fun LazyColumnScope.phenologyScreen(state: AppState, vm: MainViewModel) 
     }
 }
 
-private fun LazyColumnScope.settingsScreen(state: AppState, vm: MainViewModel) {
+private fun LazyListScope.settingsScreen(state: AppState, vm: MainViewModel) {
     item {
         SettingsCard(state.settings, vm::updateSettings)
     }
